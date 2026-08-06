@@ -384,7 +384,9 @@
         if (state.searching) {
           empty.textContent = "Searching...";
         } else if (state.query) {
-          empty.textContent = total > 0
+          empty.textContent = state.structuredQuery
+            ? `No exact series/episode match. Jackett returned ${state.looseMatches || total} loose result(s); try another indexer.`
+            : total > 0
             ? "No playable results (without magnet or .torrent link)."
             : "No results for this query.";
         } else {

@@ -251,6 +251,8 @@ async function handleSearch(payload) {
         total: result.total,
         shown: result.items.length,
       },
+      structuredQuery: result.structuredQuery,
+      looseMatches: result.looseMatches,
       status: result.items.length
         ? `Found ${result.items.length} result(s), showing top ${result.items.length}.${filterNote}`
         : result.structuredQuery

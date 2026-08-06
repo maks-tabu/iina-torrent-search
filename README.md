@@ -57,5 +57,7 @@ If `iina-torrent-stream` plugin is enabled, opened magnet or torrent links will 
   `Friends` with season `3` and episode `7` searches for `Friends S03E07`.
 - Structured season/episode searches reject loose title matches and mismatched
   episode numbers instead of showing unrelated series.
+- When Jackett has only loose matches, the panel explains that no exact episode
+  was found instead of calling the results unplayable.
 - Jackett searches can wait for every enabled indexer. If a search times out,
   increase `Timeout (sec)` in the plugin panel or disable unhealthy indexers in Jackett.
