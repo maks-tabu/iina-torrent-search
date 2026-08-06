@@ -253,7 +253,9 @@ async function handleSearch(payload) {
       },
       status: result.items.length
         ? `Found ${result.items.length} result(s), showing top ${result.items.length}.${filterNote}`
-        : "No matching torrents.",
+        : result.structuredQuery
+          ? `No exact matches for ${searchQuery}. Jackett returned ${result.looseMatches} loose match(es); try another indexer.`
+          : "No matching torrents.",
     });
   } catch (error) {
     setState({
@@ -348,14 +350,20 @@ async function searchJackett(query, settings) {
   const codecFiltered = settings.avcOnly
     ? deduped.filter((item) => isAVCX264Title(item.title))
     : deduped;
+  const structuredQuery = parseStructuredSeriesQuery(query);
+  const queryFiltered = structuredQuery
+    ? codecFiltered.filter((item) => matchesStructuredSeriesQuery(item.title, structuredQuery))
+    : codecFiltered;
 
-  sortResults(codecFiltered, query, settings.sortBy);
+  sortResults(queryFiltered, query, settings.sortBy);
 
   return {
     total: rows.length,
     codecInput: deduped.length,
     codecShown: codecFiltered.length,
-    items: codecFiltered.slice(0, settings.limit),
+    structuredQuery: Boolean(structuredQuery),
+    looseMatches: codecFiltered.length,
+    items: queryFiltered.slice(0, settings.limit),
   };
 }
 
@@ -417,6 +425,62 @@ function normalizeSearchText(value) {
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+function parseStructuredSeriesQuery(query) {
+  const normalized = normalizeSearchText(query);
+  const match = normalized.match(/\bs0*(\d{1,2})(?:e0*(\d{1,3}))?\b/);
+  if (!match) {
+    return null;
+  }
+
+  const rawTitle = normalized.slice(0, match.index).trim();
+  const title = rawTitle
+    .replace(/\b(?:19|20)\d{2}\b/g, " ")
+    .replace(/\b(?:480p|720p|1080p|2160p|4k|uhd|web|webdl|bluray|brrip)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!title) {
+    return null;
+  }
+
+  return {
+    title,
+    season: Number(match[1]),
+    episode: match[2] === undefined ? null : Number(match[2]),
+  };
+}
+
+function matchesStructuredSeriesQuery(title, query) {
+  const normalizedTitle = normalizeSearchText(title);
+  if (normalizedTitle !== query.title && !normalizedTitle.startsWith(`${query.title} `)) {
+    return false;
+  }
+
+  const episode = extractSeasonEpisode(normalizedTitle);
+  if (!episode || episode.season !== query.season) {
+    return false;
+  }
+  return query.episode === null || episode.episode === query.episode;
+}
+
+function extractSeasonEpisode(title) {
+  const standard = title.match(/\bs0*(\d{1,2})(?:e0*(\d{1,3}))?\b/);
+  if (standard) {
+    return {
+      season: Number(standard[1]),
+      episode: standard[2] === undefined ? null : Number(standard[2]),
+    };
+  }
+
+  const alternate = title.match(/\b0*(\d{1,2})x0*(\d{1,3})\b/);
+  if (alternate) {
+    return {
+      season: Number(alternate[1]),
+      episode: Number(alternate[2]),
+    };
+  }
+  return null;
 }
 
 function dedupeResultsPreferMagnet(items) {
