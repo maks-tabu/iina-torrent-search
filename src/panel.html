@@ -60,7 +60,7 @@
       color: var(--muted);
     }
 
-    input {
+    input, select {
       width: 100%;
       border: 1px solid var(--border);
       background: var(--surface);
@@ -244,6 +244,14 @@
         <label for="timeout">Timeout (sec)</label>
         <input id="timeout" type="number" min="5" max="60" step="1" placeholder="20">
       </div>
+      <div class="row">
+        <label for="sort-by">Sort by</label>
+        <select id="sort-by">
+          <option value="relevance">Relevance</option>
+          <option value="popularity">Popularity (seeders)</option>
+          <option value="newest">Newest</option>
+        </select>
+      </div>
     </div>
 
     <div class="query-row">
@@ -281,6 +289,7 @@
         limit: 50,
         timeoutSec: 20,
         avcOnly: true,
+        sortBy: "relevance",
       },
     };
 
@@ -309,6 +318,7 @@
         limit: value("limit"),
         timeoutSec: value("timeout"),
         avcOnly: Boolean(document.getElementById("avc-only") && document.getElementById("avc-only").checked),
+        sortBy: value("sort-by"),
       };
     }
 
@@ -321,6 +331,7 @@
       if (active !== "indexer") document.getElementById("indexer").value = settings.indexer || "all";
       if (active !== "limit") document.getElementById("limit").value = settings.limit != null ? String(settings.limit) : "50";
       if (active !== "timeout") document.getElementById("timeout").value = settings.timeoutSec != null ? String(settings.timeoutSec) : "20";
+      if (active !== "sort-by") document.getElementById("sort-by").value = settings.sortBy || "relevance";
       if (active !== "query") document.getElementById("query").value = state.query || "";
       document.getElementById("avc-only").checked = settings.avcOnly !== false;
     }

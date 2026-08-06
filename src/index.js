@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS = {
   limit: 50,
   timeoutSec: 20,
   avcOnly: true,
+  sortBy: "relevance",
 };
 
 const PREF_KEYS = {
@@ -25,6 +26,7 @@ const PREF_KEYS = {
   limit: "result_limit",
   timeoutSec: "request_timeout_sec",
   avcOnly: "codec_avc_only",
+  sortBy: "sort_by",
 };
 
 const LIMIT_MIN = 1;
@@ -332,11 +334,7 @@ async function searchJackett(query, settings) {
     ? deduped.filter((item) => isAVCX264Title(item.title))
     : deduped;
 
-  codecFiltered.sort((a, b) => {
-    if (b.seeders !== a.seeders) return b.seeders - a.seeders;
-    if (b.peers !== a.peers) return b.peers - a.peers;
-    return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
-  });
+  sortResults(codecFiltered, query, settings.sortBy);
 
   return {
     total: rows.length,
@@ -349,6 +347,61 @@ async function searchJackett(query, settings) {
 function isAVCX264Title(title) {
   const text = String(title || "").toLowerCase();
   return /\b(x264|h[\s._-]?264|avc)\b/.test(text);
+}
+
+function sortResults(items, query, sortBy) {
+  const mode = ["relevance", "popularity", "newest"].includes(sortBy)
+    ? sortBy
+    : DEFAULT_SETTINGS.sortBy;
+
+  items.sort((a, b) => {
+    if (mode === "relevance") {
+      const relevanceDiff = relevanceScore(b.title, query) - relevanceScore(a.title, query);
+      if (relevanceDiff !== 0) return relevanceDiff;
+    } else if (mode === "newest") {
+      const dateDiff = b.publishTimestamp - a.publishTimestamp;
+      if (dateDiff !== 0) return dateDiff;
+    }
+
+    if (b.seeders !== a.seeders) return b.seeders - a.seeders;
+    if (b.peers !== a.peers) return b.peers - a.peers;
+    return a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+  });
+}
+
+function relevanceScore(title, query) {
+  const normalizedTitle = normalizeSearchText(title);
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedTitle || !normalizedQuery) {
+    return 0;
+  }
+
+  const tokens = normalizedQuery.split(" ").filter(Boolean);
+  const titleTokens = new Set(normalizedTitle.split(" ").filter(Boolean));
+  let score = 0;
+
+  if (normalizedTitle === normalizedQuery) score += 1000;
+  if (normalizedTitle.startsWith(`${normalizedQuery} `)) score += 500;
+  else if (normalizedTitle.includes(` ${normalizedQuery} `)) score += 250;
+
+  for (const token of tokens) {
+    if (!titleTokens.has(token)) continue;
+    score += /^s\d{1,2}(?:e\d{1,3})?$/.test(token) || /^\d{4}$/.test(token) ? 120 : 40;
+  }
+
+  if (tokens.length > 1 && tokens.every((token) => titleTokens.has(token))) {
+    score += 150;
+  }
+  return score;
+}
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/&amp;/g, " and ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 function dedupeResultsPreferMagnet(items) {
@@ -412,6 +465,7 @@ function mapResult(row, index) {
     sizeBytes,
     sizeLabel: formatBytes(sizeBytes),
     publishDate: publishRaw,
+    publishTimestamp: Number.isFinite(Date.parse(publishRaw)) ? Date.parse(publishRaw) : 0,
     ageLabel: formatAge(publishRaw),
   };
 }
@@ -424,6 +478,7 @@ function loadSettings() {
     limit: getPref(PREF_KEYS.limit, String(DEFAULT_SETTINGS.limit)),
     timeoutSec: getPref(PREF_KEYS.timeoutSec, String(DEFAULT_SETTINGS.timeoutSec)),
     avcOnly: getPref(PREF_KEYS.avcOnly, DEFAULT_SETTINGS.avcOnly ? "1" : "0"),
+    sortBy: getPref(PREF_KEYS.sortBy, DEFAULT_SETTINGS.sortBy),
   };
   return sanitizeSettings(raw);
 }
@@ -435,6 +490,7 @@ function saveSettings(settings) {
   preferences.set(PREF_KEYS.limit, String(settings.limit));
   preferences.set(PREF_KEYS.timeoutSec, String(settings.timeoutSec));
   preferences.set(PREF_KEYS.avcOnly, settings.avcOnly ? "1" : "0");
+  preferences.set(PREF_KEYS.sortBy, settings.sortBy);
   preferences.sync();
 }
 
@@ -455,6 +511,9 @@ function sanitizeSettings(input) {
     limit: clampInt(input.limit, DEFAULT_SETTINGS.limit, LIMIT_MIN, LIMIT_MAX),
     timeoutSec: clampInt(input.timeoutSec, DEFAULT_SETTINGS.timeoutSec, TIMEOUT_MIN, TIMEOUT_MAX),
     avcOnly: parseBool(input.avcOnly, DEFAULT_SETTINGS.avcOnly),
+    sortBy: ["relevance", "popularity", "newest"].includes(input.sortBy)
+      ? input.sortBy
+      : DEFAULT_SETTINGS.sortBy,
   };
 }
 
