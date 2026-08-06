@@ -1,13 +1,13 @@
 {
   "name": "Torrent Search",
   "identifier": "io.github.tabu.iina-torrent-search",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Search torrents via Jackett and open magnet/.torrent directly in IINA.",
   "author": {
     "name": "maks-tabu",
     "url": "https://github.com/maks-tabu"
   },
-  "ghVersion": 1,
+  "ghVersion": 2,
   "ghRepo": "maks-tabu/iina-torrent-search",
   "entry": "src/index.js",
   "permissions": [

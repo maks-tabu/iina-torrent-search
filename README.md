@@ -50,3 +50,5 @@ If `iina-torrent-stream` plugin is enabled, opened magnet or torrent links will 
 - Default indexer: `all`
 - API key and settings are stored in plugin preferences.
 - If a result has both magnet and direct `.torrent` link, magnet is preferred.
+- Jackett searches can wait for every enabled indexer. If a search times out,
+  increase `Timeout (sec)` in the plugin panel or disable unhealthy indexers in Jackett.

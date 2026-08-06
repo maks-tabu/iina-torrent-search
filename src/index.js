@@ -287,11 +287,27 @@ async function searchJackett(query, settings) {
   }
 
   const endpoint = buildJackettSearchURL(root, settings.indexer, settings.apiKey, query);
-  const cmd = `curl -sS --fail --max-time ${settings.timeoutSec} ${sh(endpoint)}`;
-  const res = await utils.exec("/bin/bash", ["-lc", cmd]);
+  const res = await utils.exec("/usr/bin/curl", [
+    "-sS",
+    "--fail",
+    "--connect-timeout",
+    "5",
+    "--max-time",
+    String(settings.timeoutSec),
+    endpoint,
+  ]);
 
   if (res.status !== 0) {
     const detail = String(res.stderr || res.stdout || "").trim();
+    if (res.status === 28) {
+      throw new Error(
+        `Jackett request timed out after ${settings.timeoutSec}s. `
+        + "Increase Timeout or check slow/failing indexers in Jackett.",
+      );
+    }
+    if (res.status === 7) {
+      throw new Error(`Cannot connect to Jackett at ${root}. Check that Jackett is running and the URL is correct.`);
+    }
     throw new Error(detail ? `Jackett request failed: ${detail}` : `Jackett request failed with code ${res.status}`);
   }
 
@@ -559,10 +575,6 @@ function shortName(name, limit) {
   return `${text.slice(0, limit - 1)}...`;
 }
 
-function sh(input) {
-  return `'${String(input).replace(/'/g, `'\\''`)}'`;
-}
-
 function isMagnetURL(value) {
   return /^magnet:/i.test(String(value || ""));
 }
@@ -578,14 +590,24 @@ async function downloadTorrentToTemp(sourceURL, title, timeoutSec) {
     .slice(0, 64) || "torrent";
   const outPath = `/tmp/iina-torrent-search-${Date.now()}-${safeTitle}.torrent`;
   const timeout = clampInt(timeoutSec, DEFAULT_SETTINGS.timeoutSec, TIMEOUT_MIN, TIMEOUT_MAX);
-  const cmd = `curl -L -sS --fail --max-time ${timeout} -o ${sh(outPath)} ${sh(sourceURL)}`;
-  const res = await utils.exec("/bin/bash", ["-lc", cmd]);
+  const res = await utils.exec("/usr/bin/curl", [
+    "-L",
+    "-sS",
+    "--fail",
+    "--connect-timeout",
+    "5",
+    "--max-time",
+    String(timeout),
+    "-o",
+    outPath,
+    sourceURL,
+  ]);
   if (res.status !== 0) {
     const detail = String(res.stderr || res.stdout || "").trim();
     throw new Error(detail ? `Failed to download .torrent: ${detail}` : `Failed to download .torrent (code ${res.status})`);
   }
 
-  const test = await utils.exec("/bin/bash", ["-lc", `test -s ${sh(outPath)}`]);
+  const test = await utils.exec("/usr/bin/test", ["-s", outPath]);
   if (test.status !== 0) {
     throw new Error("Downloaded torrent file is empty.");
   }
@@ -594,8 +616,18 @@ async function downloadTorrentToTemp(sourceURL, title, timeoutSec) {
 
 async function tryResolveRedirectTarget(sourceURL, timeoutSec) {
   const timeout = clampInt(timeoutSec, DEFAULT_SETTINGS.timeoutSec, TIMEOUT_MIN, TIMEOUT_MAX);
-  const cmd = `curl -sS -D - -o /dev/null --max-time ${timeout} ${sh(sourceURL)}`;
-  const res = await utils.exec("/bin/bash", ["-lc", cmd]);
+  const res = await utils.exec("/usr/bin/curl", [
+    "-sS",
+    "-D",
+    "-",
+    "-o",
+    "/dev/null",
+    "--connect-timeout",
+    "5",
+    "--max-time",
+    String(timeout),
+    sourceURL,
+  ]);
   if (res.status !== 0) {
     return "";
   }
