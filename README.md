@@ -53,5 +53,7 @@ If `iina-torrent-stream` plugin is enabled, opened magnet or torrent links will 
 - Results can be sorted by relevance, popularity (seeders), or publication date.
 - Relevance ranking favors exact title phrases, titles beginning with the query,
   and matching season/episode or year tokens.
+- Series searches have separate optional season and episode fields. For example,
+  `Friends` with season `3` and episode `7` searches for `Friends S03E07`.
 - Jackett searches can wait for every enabled indexer. If a search times out,
   increase `Timeout (sec)` in the plugin panel or disable unhealthy indexers in Jackett.

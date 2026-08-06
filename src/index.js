@@ -183,6 +183,8 @@ function setState(patch) {
 
 async function handleSearch(payload) {
   const query = String(payload && payload.query ? payload.query : "").trim();
+  const season = optionalPositiveInt(payload && payload.season, 99);
+  const episode = optionalPositiveInt(payload && payload.episode, 999);
   const settings = sanitizeSettings(payload && payload.settings ? payload.settings : state.settings);
 
   state.settings = settings;
@@ -199,6 +201,19 @@ async function handleSearch(payload) {
     });
     return;
   }
+
+  if (episode !== null && season === null) {
+    setState({
+      error: "Select a season before selecting an episode.",
+      status: "Season is required for episode search.",
+      results: [],
+      summary: { total: 0, shown: 0 },
+      searching: false,
+    });
+    return;
+  }
+
+  const searchQuery = buildSeriesQuery(query, season, episode);
 
   if (!settings.apiKey) {
     setState({
@@ -220,11 +235,11 @@ async function handleSearch(payload) {
   setState({
     searching: true,
     error: "",
-    status: `Searching for: ${query}`,
+    status: `Searching for: ${searchQuery}`,
   });
 
   try {
-    const result = await searchJackett(query, settings);
+    const result = await searchJackett(searchQuery, settings);
     const filterNote = settings.avcOnly
       ? ` AVC/x264 filter: ${result.codecShown}/${result.codecInput} shown.`
       : "";
@@ -530,6 +545,31 @@ function parseBool(value, fallback) {
     if (v === "0" || v === "false" || v === "no" || v === "off") return false;
   }
   return Boolean(fallback);
+}
+
+function optionalPositiveInt(value, max) {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return null;
+  }
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+  const integer = Math.floor(number);
+  return integer >= 1 && integer <= max ? integer : null;
+}
+
+function buildSeriesQuery(query, season, episode) {
+  if (season === null) {
+    return query;
+  }
+  const base = String(query)
+    .replace(/\bs\d{1,2}(?:e\d{1,3})?\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const seasonCode = `S${String(season).padStart(2, "0")}`;
+  const episodeCode = episode === null ? "" : `E${String(episode).padStart(2, "0")}`;
+  return `${base} ${seasonCode}${episodeCode}`.trim();
 }
 
 function buildJackettSearchURL(root, indexer, apiKey, query) {

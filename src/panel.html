@@ -90,6 +90,12 @@
       gap: 8px;
     }
 
+    .episode-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
     .actions {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -255,8 +261,19 @@
     </div>
 
     <div class="query-row">
-      <input id="query" type="text" placeholder="Search query (for example: Stranger Things S05E01 1080p)">
+      <input id="query" type="text" placeholder="Series title (for example: Friends)">
       <button id="search-btn" class="primary" type="button">Search</button>
+    </div>
+
+    <div class="episode-row">
+      <div class="row">
+        <label for="season">Season (optional)</label>
+        <input id="season" type="number" min="1" max="99" step="1" placeholder="3">
+      </div>
+      <div class="row">
+        <label for="episode">Episode (optional)</label>
+        <input id="episode" type="number" min="1" max="999" step="1" placeholder="7">
+      </div>
     </div>
 
     <div class="toggle-row">
@@ -462,6 +479,8 @@
       const query = value("query").trim();
       send("panel-search", {
         query,
+        season: value("season"),
+        episode: value("episode"),
         settings: collectSettings(),
       });
     }
@@ -484,6 +503,13 @@
         if (e.key === "Enter") {
           performSearch();
         }
+      });
+      ["season", "episode"].forEach((id) => {
+        document.getElementById(id).addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            performSearch();
+          }
+        });
       });
 
       if (window.iina && typeof iina.onMessage === "function") {
