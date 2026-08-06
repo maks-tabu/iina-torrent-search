@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Torrent Search</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0e1117;
+      --surface: #171c25;
+      --surface-2: #1f2632;
+      --text: #e9edf6;
+      --muted: #9ea7ba;
+      --accent: #58a6ff;
+      --border: #2d3647;
+      --danger: #ff7b72;
+      --ok: #3fb950;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .wrap {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      min-height: 100vh;
+      grid-template-rows: auto auto auto auto 1fr;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: 0.2px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .row {
+      display: grid;
+      gap: 4px;
+    }
+
+    .row label {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    input {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 12px;
+    }
+
+    input[type="checkbox"] {
+      width: auto;
+      padding: 0;
+      accent-color: var(--accent);
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    .query-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    button {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: var(--accent);
+    }
+
+    button.primary {
+      background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    .status {
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .status.ok {
+      color: var(--ok);
+    }
+
+    .list {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      overflow: auto;
+      min-height: 200px;
+      max-height: 62vh;
+      padding: 8px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .empty {
+      font-size: 12px;
+      color: var(--muted);
+      padding: 8px;
+    }
+
+    .item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-2);
+      padding: 8px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .title {
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .item-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 1px 7px;
+      font-size: 10px;
+      letter-spacing: 0.2px;
+    }
+
+    .pill.magnet {
+      border-color: color-mix(in srgb, var(--ok) 45%, var(--border));
+      color: var(--ok);
+    }
+
+    .pill.torrent {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+      color: var(--accent);
+    }
+
+    @media (max-width: 700px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .item-actions {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Torrent Search (Jackett)</h1>
+
+    <div class="grid">
+      <div class="row">
+        <label for="jackett-url">Jackett URL</label>
+        <input id="jackett-url" type="text" placeholder="http://127.0.0.1:9117">
+      </div>
+      <div class="row">
+        <label for="jackett-api-key">API Key</label>
+        <input id="jackett-api-key" type="password" placeholder="Paste Jackett API key">
+      </div>
+      <div class="row">
+        <label for="indexer">Indexer</label>
+        <input id="indexer" type="text" placeholder="all">
+      </div>
+      <div class="row">
+        <label for="limit">Limit (1-200)</label>
+        <input id="limit" type="number" min="1" max="200" step="1" placeholder="50">
+      </div>
+      <div class="row">
+        <label for="timeout">Timeout (sec)</label>
+        <input id="timeout" type="number" min="5" max="60" step="1" placeholder="20">
+      </div>
+    </div>
+
+    <div class="query-row">
+      <input id="query" type="text" placeholder="Search query (for example: Stranger Things S05E01 1080p)">
+      <button id="search-btn" class="primary" type="button">Search</button>
+    </div>
+
+    <div class="toggle-row">
+      <input id="avc-only" type="checkbox" checked>
+      <label for="avc-only">Only AVC/x264 (hide HEVC/x265)</label>
+    </div>
+
+    <div class="actions">
+      <button id="save-btn" type="button">Save Settings</button>
+      <button id="jackett-btn" type="button">Open Jackett UI</button>
+    </div>
+
+    <div id="status" class="status">Waiting for query...</div>
+
+    <div id="list" class="list"></div>
+  </div>
+
+  <script>
+    const state = {
+      query: "",
+      status: "",
+      error: "",
+      searching: false,
+      results: [],
+      summary: { total: 0, shown: 0 },
+      settings: {
+        jackettURL: "",
+        apiKey: "",
+        indexer: "all",
+        limit: 50,
+        timeoutSec: 20,
+        avcOnly: true,
+      },
+    };
+
+    function send(message, payload) {
+      if (window.iina && typeof iina.postMessage === "function") {
+        iina.postMessage(message, payload || {});
+      }
+    }
+
+    function short(value, max) {
+      const text = String(value || "");
+      if (text.length <= max) return text;
+      return text.slice(0, max - 1) + "...";
+    }
+
+    function value(id) {
+      const el = document.getElementById(id);
+      return el ? el.value : "";
+    }
+
+    function collectSettings() {
+      return {
+        jackettURL: value("jackett-url"),
+        apiKey: value("jackett-api-key"),
+        indexer: value("indexer"),
+        limit: value("limit"),
+        timeoutSec: value("timeout"),
+        avcOnly: Boolean(document.getElementById("avc-only") && document.getElementById("avc-only").checked),
+      };
+    }
+
+    function syncFormFromState() {
+      const active = document.activeElement && document.activeElement.id;
+      const settings = state.settings || {};
+
+      if (active !== "jackett-url") document.getElementById("jackett-url").value = settings.jackettURL || "";
+      if (active !== "jackett-api-key") document.getElementById("jackett-api-key").value = settings.apiKey || "";
+      if (active !== "indexer") document.getElementById("indexer").value = settings.indexer || "all";
+      if (active !== "limit") document.getElementById("limit").value = settings.limit != null ? String(settings.limit) : "50";
+      if (active !== "timeout") document.getElementById("timeout").value = settings.timeoutSec != null ? String(settings.timeoutSec) : "20";
+      if (active !== "query") document.getElementById("query").value = state.query || "";
+      document.getElementById("avc-only").checked = settings.avcOnly !== false;
+    }
+
+    function renderStatus() {
+      const el = document.getElementById("status");
+      const msg = state.error
+        ? state.error
+        : (state.status || "Ready.");
+      el.textContent = msg;
+      el.className = "status" + (state.error ? " error" : (state.searching ? "" : " ok"));
+
+      const btn = document.getElementById("search-btn");
+      btn.disabled = state.searching;
+      btn.textContent = state.searching ? "Searching..." : "Search";
+    }
+
+    function resultTypePill(item) {
+      const span = document.createElement("span");
+      span.className = "pill " + (item.isMagnet ? "magnet" : "torrent");
+      span.textContent = item.isMagnet ? "magnet" : "torrent";
+      return span;
+    }
+
+    function renderResults() {
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+
+      if (!Array.isArray(state.results) || state.results.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        const total = state.summary && typeof state.summary.total === "number" ? state.summary.total : 0;
+        if (state.searching) {
+          empty.textContent = "Searching...";
+        } else if (state.query) {
+          empty.textContent = total > 0
+            ? "No playable results (without magnet or .torrent link)."
+            : "No results for this query.";
+        } else {
+          empty.textContent = "Run a search to see results.";
+        }
+        list.appendChild(empty);
+        return;
+      }
+
+      state.results.forEach((item) => {
+        const node = document.createElement("div");
+        node.className = "item";
+
+        const title = document.createElement("div");
+        title.className = "title";
+        title.textContent = item.title || "Untitled";
+
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.appendChild(resultTypePill(item));
+
+        if (item.tracker) {
+          const tracker = document.createElement("span");
+          tracker.textContent = short(item.tracker, 36);
+          meta.appendChild(tracker);
+        }
+
+        if (item.category) {
+          const category = document.createElement("span");
+          category.textContent = short(item.category, 42);
+          meta.appendChild(category);
+        }
+
+        if (item.sizeLabel) {
+          const size = document.createElement("span");
+          size.textContent = item.sizeLabel;
+          meta.appendChild(size);
+        }
+
+        const sp = Number(item.seeders);
+        if (Number.isFinite(sp) && sp >= 0) {
+          const seeders = document.createElement("span");
+          seeders.textContent = "S:" + sp;
+          meta.appendChild(seeders);
+        }
+
+        const pp = Number(item.peers);
+        if (Number.isFinite(pp) && pp >= 0) {
+          const peers = document.createElement("span");
+          peers.textContent = "P:" + pp;
+          meta.appendChild(peers);
+        }
+
+        if (item.ageLabel) {
+          const age = document.createElement("span");
+          age.textContent = "Age:" + item.ageLabel;
+          meta.appendChild(age);
+        }
+
+        const actions = document.createElement("div");
+        actions.className = "item-actions";
+
+        const openBtn = document.createElement("button");
+        openBtn.type = "button";
+        openBtn.className = "primary";
+        openBtn.textContent = "Open in IINA";
+        openBtn.addEventListener("click", () => {
+          send("panel-open", { url: item.openURL, title: item.title });
+        });
+
+        const browserBtn = document.createElement("button");
+        browserBtn.type = "button";
+        browserBtn.textContent = "Open Details";
+        browserBtn.disabled = !item.detailsURL;
+        browserBtn.addEventListener("click", () => {
+          if (item.detailsURL) {
+            send("panel-open-browser", { url: item.detailsURL });
+          }
+        });
+
+        actions.appendChild(openBtn);
+        actions.appendChild(browserBtn);
+
+        node.appendChild(title);
+        node.appendChild(meta);
+        node.appendChild(actions);
+        list.appendChild(node);
+      });
+    }
+
+    function performSearch() {
+      const query = value("query").trim();
+      send("panel-search", {
+        query,
+        settings: collectSettings(),
+      });
+    }
+
+    function saveSettings() {
+      send("panel-save-settings", collectSettings());
+    }
+
+    function openJackettUI() {
+      const url = value("jackett-url").trim();
+      if (!url) return;
+      send("panel-open-browser", { url });
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("search-btn").addEventListener("click", performSearch);
+      document.getElementById("save-btn").addEventListener("click", saveSettings);
+      document.getElementById("jackett-btn").addEventListener("click", openJackettUI);
+      document.getElementById("query").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          performSearch();
+        }
+      });
+
+      if (window.iina && typeof iina.onMessage === "function") {
+        iina.onMessage("panel-state", (payload) => {
+          Object.assign(state, payload || {});
+          if (!Array.isArray(state.results)) state.results = [];
+          if (!state.settings || typeof state.settings !== "object") state.settings = {};
+          syncFormFromState();
+          renderStatus();
+          renderResults();
+        });
+      }
+
+      renderStatus();
+      renderResults();
+      send("panel-ready");
+      send("panel-request-state");
+    });
+  </script>
+</body>
+</html>
