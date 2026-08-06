@@ -92,7 +92,7 @@
 
     .episode-row {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 8px;
     }
 
@@ -258,6 +258,15 @@
           <option value="newest">Newest</option>
         </select>
       </div>
+      <div class="row">
+        <label for="media-type">Content type</label>
+        <select id="media-type">
+          <option value="auto">Auto</option>
+          <option value="tv">TV series</option>
+          <option value="movies">Movies</option>
+          <option value="all">All categories</option>
+        </select>
+      </div>
     </div>
 
     <div class="query-row">
@@ -273,6 +282,10 @@
       <div class="row">
         <label for="episode">Episode (optional)</label>
         <input id="episode" type="number" min="1" max="999" step="1" placeholder="7">
+      </div>
+      <div class="row">
+        <label for="year">Year (optional)</label>
+        <input id="year" type="number" min="1900" max="2100" step="1" placeholder="1994">
       </div>
     </div>
 
@@ -307,6 +320,7 @@
         timeoutSec: 20,
         avcOnly: true,
         sortBy: "relevance",
+        mediaType: "auto",
       },
     };
 
@@ -336,6 +350,7 @@
         timeoutSec: value("timeout"),
         avcOnly: Boolean(document.getElementById("avc-only") && document.getElementById("avc-only").checked),
         sortBy: value("sort-by"),
+        mediaType: value("media-type"),
       };
     }
 
@@ -349,6 +364,7 @@
       if (active !== "limit") document.getElementById("limit").value = settings.limit != null ? String(settings.limit) : "50";
       if (active !== "timeout") document.getElementById("timeout").value = settings.timeoutSec != null ? String(settings.timeoutSec) : "20";
       if (active !== "sort-by") document.getElementById("sort-by").value = settings.sortBy || "relevance";
+      if (active !== "media-type") document.getElementById("media-type").value = settings.mediaType || "auto";
       if (active !== "query") document.getElementById("query").value = state.query || "";
       document.getElementById("avc-only").checked = settings.avcOnly !== false;
     }
@@ -483,6 +499,7 @@
         query,
         season: value("season"),
         episode: value("episode"),
+        year: value("year"),
         settings: collectSettings(),
       });
     }
@@ -506,7 +523,7 @@
           performSearch();
         }
       });
-      ["season", "episode"].forEach((id) => {
+      ["season", "episode", "year"].forEach((id) => {
         document.getElementById(id).addEventListener("keydown", (e) => {
           if (e.key === "Enter") {
             performSearch();

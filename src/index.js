@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS = {
   timeoutSec: 20,
   avcOnly: true,
   sortBy: "relevance",
+  mediaType: "auto",
 };
 
 const PREF_KEYS = {
@@ -27,6 +28,7 @@ const PREF_KEYS = {
   timeoutSec: "request_timeout_sec",
   avcOnly: "codec_avc_only",
   sortBy: "sort_by",
+  mediaType: "media_type",
 };
 
 const LIMIT_MIN = 1;
@@ -185,6 +187,7 @@ async function handleSearch(payload) {
   const query = String(payload && payload.query ? payload.query : "").trim();
   const season = optionalPositiveInt(payload && payload.season, 99);
   const episode = optionalPositiveInt(payload && payload.episode, 999);
+  const year = optionalYear(payload && payload.year);
   const settings = sanitizeSettings(payload && payload.settings ? payload.settings : state.settings);
 
   state.settings = settings;
@@ -213,7 +216,7 @@ async function handleSearch(payload) {
     return;
   }
 
-  const searchQuery = buildSeriesQuery(query, season, episode);
+  const searchQuery = buildSeriesQuery(query, season, episode, year);
 
   if (!settings.apiKey) {
     setState({
@@ -307,7 +310,9 @@ async function searchJackett(query, settings) {
     throw new Error("Jackett URL is empty.");
   }
 
-  const endpoint = buildJackettSearchURL(root, settings.indexer, settings.apiKey, query);
+  const structuredQuery = parseStructuredSeriesQuery(query);
+  const category = resolveSearchCategory(settings.mediaType, Boolean(structuredQuery));
+  const endpoint = buildJackettSearchURL(root, settings.indexer, settings.apiKey, query, category);
   const res = await utils.exec("/usr/bin/curl", [
     "-sS",
     "--fail",
@@ -352,7 +357,6 @@ async function searchJackett(query, settings) {
   const codecFiltered = settings.avcOnly
     ? deduped.filter((item) => isAVCX264Title(item.title))
     : deduped;
-  const structuredQuery = parseStructuredSeriesQuery(query);
   const queryFiltered = structuredQuery
     ? codecFiltered.filter((item) => matchesStructuredSeriesQuery(item.title, structuredQuery))
     : codecFiltered;
@@ -560,6 +564,7 @@ function loadSettings() {
     timeoutSec: getPref(PREF_KEYS.timeoutSec, String(DEFAULT_SETTINGS.timeoutSec)),
     avcOnly: getPref(PREF_KEYS.avcOnly, DEFAULT_SETTINGS.avcOnly ? "1" : "0"),
     sortBy: getPref(PREF_KEYS.sortBy, DEFAULT_SETTINGS.sortBy),
+    mediaType: getPref(PREF_KEYS.mediaType, DEFAULT_SETTINGS.mediaType),
   };
   return sanitizeSettings(raw);
 }
@@ -572,6 +577,7 @@ function saveSettings(settings) {
   preferences.set(PREF_KEYS.timeoutSec, String(settings.timeoutSec));
   preferences.set(PREF_KEYS.avcOnly, settings.avcOnly ? "1" : "0");
   preferences.set(PREF_KEYS.sortBy, settings.sortBy);
+  preferences.set(PREF_KEYS.mediaType, settings.mediaType);
   preferences.sync();
 }
 
@@ -595,6 +601,9 @@ function sanitizeSettings(input) {
     sortBy: ["relevance", "popularity", "newest"].includes(input.sortBy)
       ? input.sortBy
       : DEFAULT_SETTINGS.sortBy,
+    mediaType: ["auto", "tv", "movies", "all"].includes(input.mediaType)
+      ? input.mediaType
+      : DEFAULT_SETTINGS.mediaType,
   };
 }
 
@@ -625,26 +634,45 @@ function optionalPositiveInt(value, max) {
   return integer >= 1 && integer <= max ? integer : null;
 }
 
-function buildSeriesQuery(query, season, episode) {
-  if (season === null) {
-    return query;
-  }
-  const base = String(query)
-    .replace(/\bs\d{1,2}(?:e\d{1,3})?\b/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  const seasonCode = `S${String(season).padStart(2, "0")}`;
-  const episodeCode = episode === null ? "" : `E${String(episode).padStart(2, "0")}`;
-  return `${base} ${seasonCode}${episodeCode}`.trim();
+function optionalYear(value) {
+  const year = optionalPositiveInt(value, 2100);
+  return year !== null && year >= 1900 ? year : null;
 }
 
-function buildJackettSearchURL(root, indexer, apiKey, query) {
+function buildSeriesQuery(query, season, episode, year = null) {
+  if (season === null && year === null) {
+    return query;
+  }
+  let base = String(query).replace(/\bs\d{1,2}(?:e\d{1,3})?\b/gi, " ");
+  if (year !== null) {
+    base = base.replace(/\b(?:19|20)\d{2}\b/g, " ");
+  }
+  base = base.replace(/\s+/g, " ").trim();
+  const yearCode = year === null ? "" : ` ${year}`;
+  if (season === null) {
+    return `${base}${yearCode}`.trim();
+  }
+  const seasonCode = `S${String(season).padStart(2, "0")}`;
+  const episodeCode = episode === null ? "" : `E${String(episode).padStart(2, "0")}`;
+  return `${base}${yearCode} ${seasonCode}${episodeCode}`.trim();
+}
+
+function resolveSearchCategory(mediaType, structuredQuery) {
+  if (mediaType === "tv" || (mediaType === "auto" && structuredQuery)) return "5000";
+  if (mediaType === "movies") return "2000";
+  return "";
+}
+
+function buildJackettSearchURL(root, indexer, apiKey, query, category = "") {
   const base = root.replace(/\/+$/, "");
   const idx = encodeURIComponent(indexer || "all");
   const qs = [
     `apikey=${encodeURIComponent(apiKey)}`,
     `Query=${encodeURIComponent(query)}`,
   ];
+  if (category) {
+    qs.push(`Category=${encodeURIComponent(category)}`);
+  }
   return `${base}/api/v2.0/indexers/${idx}/results?${qs.join("&")}`;
 }
 
