@@ -12,7 +12,7 @@ const {
 const DEFAULT_SETTINGS = {
   jackettURL: "http://127.0.0.1:9117",
   apiKey: "",
-  indexer: "all",
+  indexer: "1337x,eztv",
   limit: 50,
   timeoutSec: 20,
   avcOnly: true,
@@ -246,6 +246,9 @@ async function handleSearch(payload) {
     const filterNote = settings.avcOnly
       ? ` AVC/x264 filter: ${result.codecShown}/${result.codecInput} shown.`
       : "";
+    const indexerNote = result.indexerErrors.length
+      ? ` Failed indexers: ${result.indexerErrors.map((error) => error.split(":")[0]).join(", ")}.`
+      : "";
     setState({
       searching: false,
       error: "",
@@ -257,10 +260,10 @@ async function handleSearch(payload) {
       structuredQuery: result.structuredQuery,
       looseMatches: result.looseMatches,
       status: result.items.length
-        ? `Found ${result.items.length} result(s), showing top ${result.items.length}.${filterNote}`
+        ? `Found ${result.items.length} result(s), showing top ${result.items.length}.${filterNote}${indexerNote}`
         : result.structuredQuery
-          ? `No exact matches for ${searchQuery}. Jackett returned ${result.looseMatches} loose match(es); try another indexer.`
-          : "No matching torrents.",
+          ? `No exact matches for ${searchQuery}. Jackett returned ${result.looseMatches} loose match(es); try another indexer.${indexerNote}`
+          : `No matching torrents.${indexerNote}`,
     });
   } catch (error) {
     setState({
@@ -312,40 +315,24 @@ async function searchJackett(query, settings) {
 
   const structuredQuery = parseStructuredSeriesQuery(query);
   const category = resolveSearchCategory(settings.mediaType, Boolean(structuredQuery));
-  const endpoint = buildJackettSearchURL(root, settings.indexer, settings.apiKey, query, category);
-  const res = await utils.exec("/usr/bin/curl", [
-    "-sS",
-    "--fail",
-    "--connect-timeout",
-    "5",
-    "--max-time",
-    String(settings.timeoutSec),
-    endpoint,
-  ]);
+  const indexerNames = parseIndexerList(settings.indexer);
+  const responses = [];
+  const failures = [];
 
-  if (res.status !== 0) {
-    const detail = String(res.stderr || res.stdout || "").trim();
-    if (res.status === 28) {
-      throw new Error(
-        `Jackett request timed out after ${settings.timeoutSec}s. `
-        + "Increase Timeout or check slow/failing indexers in Jackett.",
-      );
+  for (const indexerName of indexerNames) {
+    try {
+      responses.push(await fetchJackettIndexer(root, indexerName, settings.apiKey, query, category, settings.timeoutSec));
+    } catch (error) {
+      failures.push(`${indexerName}: ${formatError(error)}`);
     }
-    if (res.status === 7) {
-      throw new Error(`Cannot connect to Jackett at ${root}. Check that Jackett is running and the URL is correct.`);
-    }
-    throw new Error(detail ? `Jackett request failed: ${detail}` : `Jackett request failed with code ${res.status}`);
   }
 
-  let parsed;
-  try {
-    parsed = JSON.parse(res.stdout || "{}");
-  } catch (error) {
-    throw new Error(`Invalid JSON from Jackett: ${formatError(error)}`);
+  if (responses.length === 0) {
+    throw new Error(failures.join("\n") || "No indexers are configured in Jackett. Add indexers in Jackett Web UI first.");
   }
 
-  const rows = Array.isArray(parsed.Results) ? parsed.Results : [];
-  const indexers = Array.isArray(parsed.Indexers) ? parsed.Indexers : [];
+  const rows = responses.flatMap((response) => response.rows);
+  const indexers = responses.flatMap((response) => response.indexers);
   if (rows.length === 0 && indexers.length === 0) {
     throw new Error("No indexers are configured in Jackett. Add indexers in Jackett Web UI first.");
   }
@@ -369,8 +356,53 @@ async function searchJackett(query, settings) {
     codecShown: codecFiltered.length,
     structuredQuery: Boolean(structuredQuery),
     looseMatches: codecFiltered.length,
+    indexerErrors: failures,
     items: queryFiltered.slice(0, settings.limit),
   };
+}
+
+async function fetchJackettIndexer(root, indexer, apiKey, query, category, timeoutSec) {
+  const endpoint = buildJackettSearchURL(root, indexer, apiKey, query, category);
+  const res = await utils.exec("/usr/bin/curl", [
+    "-sS",
+    "--fail",
+    "--connect-timeout",
+    "5",
+    "--max-time",
+    String(timeoutSec),
+    endpoint,
+  ]);
+
+  if (res.status !== 0) {
+    const detail = String(res.stderr || res.stdout || "").trim();
+    if (res.status === 28) {
+      throw new Error(`request timed out after ${timeoutSec}s`);
+    }
+    if (res.status === 7) {
+      throw new Error("cannot connect to Jackett");
+    }
+    throw new Error(detail ? `request failed: ${detail}` : `request failed with code ${res.status}`);
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(res.stdout || "{}");
+  } catch (error) {
+    throw new Error(`invalid JSON: ${formatError(error)}`);
+  }
+
+  return {
+    rows: Array.isArray(parsed.Results) ? parsed.Results : [],
+    indexers: Array.isArray(parsed.Indexers) ? parsed.Indexers : [],
+  };
+}
+
+function parseIndexerList(value) {
+  const names = String(value || "")
+    .split(/[\s,;]+/)
+    .map((name) => name.trim())
+    .filter(Boolean);
+  return names.length ? [...new Set(names)] : [DEFAULT_SETTINGS.indexer];
 }
 
 function isAVCX264Title(title) {

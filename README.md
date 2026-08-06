@@ -61,5 +61,8 @@ If `iina-torrent-stream` plugin is enabled, opened magnet or torrent links will 
   was found instead of calling the results unplayable.
 - Content type filtering uses Jackett's TV and Movies categories; Auto selects TV
   whenever a season or episode is present. An optional year disambiguates common titles.
+- Multiple indexers can be entered as a comma-separated list. For example:
+  `1337x,eztv`. Add and test both indexers in Jackett first, then use this value
+  in the plugin's `Indexer(s)` field.
 - Jackett searches can wait for every enabled indexer. If a search times out,
   increase `Timeout (sec)` in the plugin panel or disable unhealthy indexers in Jackett.
